@@ -1,0 +1,9 @@
+{
+  "name": "speed-sudoku",
+  "main": "./src/parties/sudoku-party.js",
+  "compatibilityDate": "2025-05-04",
+  "port": 1999,
+  "parties": {
+    "sudoku": "./src/parties/sudoku-party.js"
+  }
+} 
