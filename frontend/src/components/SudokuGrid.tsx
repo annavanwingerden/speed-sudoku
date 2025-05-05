@@ -198,7 +198,7 @@ export const SudokuGrid: React.FC<Props> = ({ gameState, onCellUpdate, client })
           <h4 className="text-md font-semibold text-gray-600 mb-1"> 
             Start putting in numbers and your friend will see your moves.
             <br></br>
-            Inviting a new player &/ refreshing the page will reset the game.
+            Inviting a new player or refreshing the page will reset the game.
           </h4>
         </div>
 
