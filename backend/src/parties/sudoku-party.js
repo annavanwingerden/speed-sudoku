@@ -4,12 +4,12 @@ class SudokuParty {
   constructor(party) {
     this.party = party;
     this.gameState = null;
-    this.connections = new Set();
+    this.connections = new Map(); // Change to Map to track connection state
   }
 
   async onConnect(conn) {
     console.log('New connection established:', conn.id);
-    this.connections.add(conn);
+    this.connections.set(conn.id, conn);
     
     // Load game state from storage if it exists
     if (!this.gameState) {
@@ -35,11 +35,22 @@ class SudokuParty {
       const existingPlayer = this.gameState.players.get(conn.id);
       if (existingPlayer) {
         console.log('Player exists, sending their board state');
+        // Only send necessary data to the player
         conn.send(JSON.stringify({
           type: 'GAME_STATE',
           state: {
-            ...this.gameState,
-            puzzle: existingPlayer.board // Send player's current board state
+            puzzle: existingPlayer.board,
+            gameMode: this.gameState.gameMode,
+            difficulty: this.gameState.difficulty,
+            startTime: this.gameState.startTime,
+            isComplete: this.gameState.isComplete,
+            winner: this.gameState.winner,
+            // Send minimal player info
+            players: Array.from(this.gameState.players.entries()).map(([id, player]) => ({
+              id,
+              score: player.score,
+              color: player.color
+            }))
           }
         }));
       } else {
@@ -47,10 +58,28 @@ class SudokuParty {
         // For new players, send the initial puzzle
         conn.send(JSON.stringify({
           type: 'GAME_STATE',
-          state: this.gameState
+          state: {
+            puzzle: this.gameState.puzzle,
+            gameMode: this.gameState.gameMode,
+            difficulty: this.gameState.difficulty,
+            startTime: this.gameState.startTime,
+            isComplete: this.gameState.isComplete,
+            winner: this.gameState.winner,
+            // Send minimal player info
+            players: Array.from(this.gameState.players.entries()).map(([id, player]) => ({
+              id,
+              score: player.score,
+              color: player.color
+            }))
+          }
         }));
       }
     }
+  }
+
+  onClose(conn) {
+    console.log('Connection closed:', conn.id);
+    this.connections.delete(conn.id);
   }
 
   async onMessage(message, sender) {
@@ -62,25 +91,45 @@ class SudokuParty {
         console.log('Creating new game with difficulty:', data.difficulty);
         // Generate a new puzzle
         const puzzle = generateSudokuPuzzle(data.difficulty);
+        console.log('Generated puzzle:', puzzle);
         
         this.gameState = {
           puzzle,
           players: new Map(),
           startTime: Date.now(),
           gameMode: data.gameMode,
+          difficulty: data.difficulty,
           isComplete: false
         };
 
-        // Save game state to storage
-        await this.party.storage.put('gameState', this.gameState);
+        // Save game state to storage with minimal data
+        await this.party.storage.put('gameState', {
+          puzzle,
+          startTime: this.gameState.startTime,
+          gameMode: this.gameState.gameMode,
+          difficulty: this.gameState.difficulty,
+          isComplete: false,
+          players: Object.fromEntries(this.gameState.players)
+        });
         console.log('Game state saved to storage');
 
-        // Broadcast game state to all players
+        // Broadcast game state to all players with minimal data
         this.connections.forEach(conn => {
           console.log('Broadcasting game state to player:', conn.id);
           conn.send(JSON.stringify({
             type: 'GAME_CREATED',
-            state: this.gameState
+            state: {
+              puzzle,
+              gameMode: this.gameState.gameMode,
+              difficulty: this.gameState.difficulty,
+              startTime: this.gameState.startTime,
+              isComplete: false,
+              players: Array.from(this.gameState.players.entries()).map(([id, player]) => ({
+                id,
+                score: player.score,
+                color: player.color
+              }))
+            }
           }));
         });
         break;
@@ -99,34 +148,80 @@ class SudokuParty {
         // Check if player already exists
         if (!this.gameState.players.has(sender.id)) {
           console.log('Adding new player to game');
-          // Add new player to game
+          // Add new player to game with a color
+          const colors = [
+            '#FF6B6B', // Red
+            '#4ECDC4', // Teal
+            '#45B7D1', // Blue
+            '#96CEB4', // Green
+            '#FFEEAD', // Yellow
+            '#D4A5A5', // Pink
+            '#9B59B6', // Purple
+            '#3498DB', // Light Blue
+            '#E67E22'  // Orange
+          ];
+          
+          // Generate a consistent color based on player ID
+          const colorIndex = sender.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+          const playerColor = colors[colorIndex];
+
           const player = {
             id: sender.id,
             board: this.gameState.puzzle.map(row => [...row]),
-            score: 0
+            score: 0,
+            color: playerColor
           };
           this.gameState.players.set(sender.id, player);
 
-          // Save updated game state
-          await this.party.storage.put('gameState', this.gameState);
+          // Save updated game state with minimal data
+          await this.party.storage.put('gameState', {
+            puzzle: this.gameState.puzzle,
+            startTime: this.gameState.startTime,
+            gameMode: this.gameState.gameMode,
+            difficulty: this.gameState.difficulty,
+            isComplete: this.gameState.isComplete,
+            winner: this.gameState.winner,
+            players: Object.fromEntries(this.gameState.players)
+          });
           console.log('Updated game state saved to storage');
 
-          // Broadcast player joined
+          // Broadcast player joined with minimal data
           this.connections.forEach(conn => {
             console.log('Broadcasting player joined to:', conn.id);
             conn.send(JSON.stringify({
               type: 'PLAYER_JOINED',
-              state: this.gameState
+              state: {
+                puzzle: this.gameState.puzzle,
+                gameMode: this.gameState.gameMode,
+                difficulty: this.gameState.difficulty,
+                startTime: this.gameState.startTime,
+                isComplete: this.gameState.isComplete,
+                winner: this.gameState.winner,
+                players: Array.from(this.gameState.players.entries()).map(([id, player]) => ({
+                  id,
+                  score: player.score,
+                  color: player.color
+                }))
+              }
             }));
           });
         } else {
           console.log('Player reconnecting, sending current state');
-          // Send current state to reconnecting player
+          // Send current state to reconnecting player with minimal data
           sender.send(JSON.stringify({
             type: 'GAME_STATE',
             state: {
-              ...this.gameState,
-              puzzle: this.gameState.players.get(sender.id).board
+              puzzle: this.gameState.players.get(sender.id).board,
+              gameMode: this.gameState.gameMode,
+              difficulty: this.gameState.difficulty,
+              startTime: this.gameState.startTime,
+              isComplete: this.gameState.isComplete,
+              winner: this.gameState.winner,
+              players: Array.from(this.gameState.players.entries()).map(([id, player]) => ({
+                id,
+                score: player.score,
+                color: player.color
+              }))
             }
           }));
         }
@@ -144,9 +239,9 @@ class SudokuParty {
         }
 
         const { row, col, value } = data;
-        const playerBoard = this.gameState.players.get(sender.id)?.board;
+        const player = this.gameState.players.get(sender.id);
         
-        if (!playerBoard) {
+        if (!player) {
           console.log('Player not in game, sending error');
           sender.send(JSON.stringify({
             type: 'ERROR',
@@ -156,7 +251,7 @@ class SudokuParty {
         }
 
         // Update player's board
-        playerBoard[row][col] = value;
+        player.board[row][col] = value;
         console.log('Updated player board');
 
         // In collaborative mode, update all players' boards
@@ -168,17 +263,23 @@ class SudokuParty {
         }
 
         // Save updated game state
-        await this.party.storage.put('gameState', this.gameState);
+        await this.party.storage.put('gameState', {
+          ...this.gameState,
+          players: Object.fromEntries(this.gameState.players)
+        });
         console.log('Updated game state saved to storage');
 
         // Check if game is complete
-        if (this.isBoardComplete(playerBoard)) {
+        if (this.isBoardComplete(player.board)) {
           console.log('Game complete! Winner:', sender.id);
           this.gameState.isComplete = true;
           this.gameState.winner = sender.id;
           
           // Save final game state
-          await this.party.storage.put('gameState', this.gameState);
+          await this.party.storage.put('gameState', {
+            ...this.gameState,
+            players: Object.fromEntries(this.gameState.players)
+          });
           
           this.connections.forEach(conn => {
             console.log('Broadcasting game complete to:', conn.id);
@@ -188,7 +289,7 @@ class SudokuParty {
             }));
           });
         } else {
-          // Broadcast move to all players with player ID
+          // Broadcast move to all players with player ID and color
           this.connections.forEach(conn => {
             console.log('Broadcasting move to:', conn.id);
             conn.send(JSON.stringify({
@@ -197,6 +298,7 @@ class SudokuParty {
               row,
               col,
               value,
+              color: player.color,
               gameMode: this.gameState.gameMode
             }));
           });

@@ -165,17 +165,7 @@ export class SudokuService {
 }
 
 export function generateSudokuPuzzle(difficulty: string): number[][] {
-  // For now, return a simple puzzle for testing
-  // In a real implementation, this would generate puzzles based on difficulty
-  return [
-    [5, 3, 0, 0, 7, 0, 0, 0, 0],
-    [6, 0, 0, 1, 9, 5, 0, 0, 0],
-    [0, 9, 8, 0, 0, 0, 0, 6, 0],
-    [8, 0, 0, 0, 6, 0, 0, 0, 3],
-    [4, 0, 0, 8, 0, 3, 0, 0, 1],
-    [7, 0, 0, 0, 2, 0, 0, 0, 6],
-    [0, 6, 0, 0, 0, 0, 2, 8, 0],
-    [0, 0, 0, 4, 1, 9, 0, 0, 5],
-    [0, 0, 0, 0, 8, 0, 0, 7, 9]
-  ];
+  // Use the SudokuService to generate a puzzle with the specified difficulty
+  const puzzle = SudokuService.generatePuzzle(difficulty as 'Easy' | 'Medium' | 'Hard' | 'Diabolical');
+  return puzzle.puzzle;
 } 

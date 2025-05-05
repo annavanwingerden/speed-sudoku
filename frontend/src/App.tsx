@@ -5,12 +5,18 @@ import { SudokuClient } from './utils/partykit';
 import { uniqueNamesGenerator, Config, adjectives, animals } from 'unique-names-generator';
 import './App.css';
 
+interface Player {
+  board: number[][];
+  score: number;
+  color: string;
+}
+
 interface GameState {
   roomId: string | null;
   gameMode: 'blind' | 'collaborative' | null;
   difficulty: string | null;
   puzzle: number[][] | null;
-  players: Map<string, any> | null;
+  players: Map<string, Player> | { [key: string]: Player } | null;
 }
 
 const App: React.FC = () => {
@@ -43,7 +49,9 @@ const App: React.FC = () => {
           const newState = {
             ...prev,
             puzzle: state.puzzle,
-            players: state.players
+            players: state.players,
+            gameMode: state.gameMode || prev.gameMode,
+            difficulty: state.difficulty || prev.difficulty
           };
           console.log('Updated game state:', newState);
           return newState;
@@ -57,10 +65,7 @@ const App: React.FC = () => {
       }
     );
 
-    // Create the game with the selected difficulty
-    client.createGame(difficulty, gameMode);
-
-    // Update the game state
+    // Update the game state first
     setGameState({
       roomId: client.roomId,
       gameMode,
@@ -68,6 +73,9 @@ const App: React.FC = () => {
       puzzle: null,
       players: null
     });
+
+    // Create the game with the selected difficulty
+    client.createGame(difficulty, gameMode);
   };
 
   // Join an existing room by roomId

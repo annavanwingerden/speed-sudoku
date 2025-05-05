@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { SudokuClient } from '../utils/partykit';
 
+interface Player {
+  board: number[][];
+  score: number;
+  color: string;
+}
+
 interface SudokuGridProps {
   gameState: {
     roomId: string | null;
     gameMode: 'blind' | 'collaborative' | null;
     difficulty: string | null;
     puzzle: number[][] | null;
-    players: Map<string, any> | null;
+    players: Map<string, Player> | { [key: string]: Player } | null;
   };
 }
 
@@ -78,43 +84,34 @@ const SudokuGrid: React.FC<SudokuGridProps> = ({ gameState }) => {
           // Update local state with game state
           if (state.puzzle) {
             console.log('Setting board from PartyKit state:', state.puzzle);
-            setBoard(state.puzzle);
+            setBoard(state.puzzle.map(row => [...row]));
             // Reset player filled cells when new puzzle is loaded
             setPlayerFilledCells(Array(9).fill(null).map(() => Array(9).fill(false)));
             setCellPlayers(Array(9).fill(null).map(() => Array(9).fill('')));
-          }
-          // Log players for debugging
-          if (state.players) {
-            console.log('Current players:', state.players);
-            // Log the current player's ID
-            const playersArray = state.players instanceof Map 
-              ? Array.from(state.players.keys())
-              : Object.keys(state.players);
-            console.log('Players array:', playersArray);
           }
         },
         (move) => {
           console.log('Move received:', move);
           // Update board with move for both collaborative and blind modes
           setBoard(prev => {
-            const newBoard = [...prev];
+            const newBoard = prev.map(row => [...row]);
             newBoard[move.row][move.col] = move.value;
             return newBoard;
           });
           // Mark the cell as player-filled and store the player ID
           setPlayerFilledCells(prev => {
-            const newFilled = [...prev];
+            const newFilled = prev.map(row => [...row]);
             newFilled[move.row][move.col] = true;
             return newFilled;
           });
           setCellPlayers(prev => {
-            const newPlayers = [...prev];
+            const newPlayers = prev.map(row => [...row]);
             newPlayers[move.row][move.col] = move.playerId;
-            console.log('Setting cell player:', { 
-              row: move.row, 
-              col: move.col, 
+            console.log('Updated cell player:', {
+              row: move.row,
+              col: move.col,
               playerId: move.playerId,
-              gameMode: move.gameMode 
+              color: move.color
             });
             return newPlayers;
           });
@@ -132,7 +129,7 @@ const SudokuGrid: React.FC<SudokuGridProps> = ({ gameState }) => {
         newClient.disconnect();
       };
     }
-  }, [gameState.roomId, gameState.gameMode]);
+  }, [gameState.roomId, gameState.gameMode, gameState]);
 
   const handleCellClick = (row: number, col: number) => {
     setSelectedCell([row, col]);
@@ -147,25 +144,27 @@ const SudokuGrid: React.FC<SudokuGridProps> = ({ gameState }) => {
         console.error('Waiting for player ID to be assigned...');
         return;
       }
+
+      console.log('Making move:', { row, col, number, playerId: client.getPlayerId() });
       
       // Update local state immediately for better UX
       setBoard(prev => {
-        const newBoard = [...prev];
+        const newBoard = prev.map(row => [...row]);
         newBoard[row][col] = number;
         return newBoard;
       });
       
       // Mark the cell as player-filled and store the current player's ID
       setPlayerFilledCells(prev => {
-        const newFilled = [...prev];
+        const newFilled = prev.map(row => [...row]);
         newFilled[row][col] = true;
         return newFilled;
       });
 
       // Store the current player's ID for this cell
       setCellPlayers(prev => {
-        const newPlayers = [...prev];
-        // The player ID will be set when we receive the MOVE_MADE message from the server
+        const newPlayers = prev.map(row => [...row]);
+        newPlayers[row][col] = client.getPlayerId() || '';
         return newPlayers;
       });
 
@@ -173,10 +172,6 @@ const SudokuGrid: React.FC<SudokuGridProps> = ({ gameState }) => {
       client.makeMove(row, col, number);
     }
   };
-
-  // Custom colors
-  const selectedColor = 'bg-orange-400'; // orange for selected
-  const highlightColor = 'bg-yellow-100'; // light yellow for row/col/box
 
   // Invite link logic
   const inviteLink = gameState.roomId ? `${window.location.origin}?roomId=${gameState.roomId}` : '';
@@ -261,14 +256,14 @@ const SudokuGrid: React.FC<SudokuGridProps> = ({ gameState }) => {
                     Math.floor(colIndex / 3) === Math.floor(selectedCell?.[1]! / 3);
                   
                   const playerId = cellPlayers[rowIndex][colIndex];
-                  const playersArray = gameState.players instanceof Map 
-                    ? Array.from(gameState.players.keys())
-                    : Object.keys(gameState.players || {});
-                  const playerIndex = playersArray.indexOf(playerId);
                   const isPlayerFilled = playerFilledCells[rowIndex][colIndex];
-                  const playerColor = isPlayerFilled && playerIndex >= 0 
-                    ? PLAYER_COLORS[`player${playerIndex + 1}`] 
-                    : 'text-gray-900'; // Black for original puzzle numbers
+                  
+                  // Get the player's color from the game state
+                  const playerColor = isPlayerFilled && gameState.players ? 
+                    (gameState.players instanceof Map ? 
+                      gameState.players.get(playerId)?.color : 
+                      (gameState.players as { [key: string]: Player })[playerId]?.color) 
+                    : '#000000';
                   
                   return (
                     <div
@@ -286,7 +281,10 @@ const SudokuGrid: React.FC<SudokuGridProps> = ({ gameState }) => {
                       onClick={() => handleCellClick(rowIndex, colIndex)}
                     >
                       {cell !== 0 ? (
-                        <span className={`${playerColor} font-bold`}>
+                        <span style={{ 
+                          color: playerColor,
+                          fontWeight: 'bold'
+                        }}>
                           {cell}
                         </span>
                       ) : ''}
