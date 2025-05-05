@@ -49,7 +49,7 @@ export class SudokuClient {
     this.onGameComplete = onGameComplete;
 
     this.socket = new PartySocket({
-      host: 'localhost:1999',
+      host:  'speed-sudoku.annavanwingerden.partykit.dev',
       room: roomId,
       party: 'sudoku'
     });
