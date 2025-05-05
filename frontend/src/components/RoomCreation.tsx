@@ -27,6 +27,11 @@ const RoomCreation: React.FC<RoomCreationProps> = ({ onCreateRoom, onJoinRoom })
     <div className="bg-white shadow sm:rounded-lg">
       <div className="px-4 py-5 sm:p-6">
         <h3 className="text-lg font-medium leading-6 text-gray-900">Create a New Game</h3>
+        <h4 className="text-md font-semibold text-gray-600 mb-1"> 
+          Play speed sudoku with your friend.
+          <br></br>
+          Collaborative mode allows you to see each other's moves - and play on the same board!
+        </h4>
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div>
             <label htmlFor="difficulty" className="block text-sm font-medium text-gray-700">
@@ -48,7 +53,7 @@ const RoomCreation: React.FC<RoomCreationProps> = ({ onCreateRoom, onJoinRoom })
           <div>
             <label className="block text-sm font-medium text-gray-700">Game Mode</label>
             <div className="mt-2 space-y-4">
-              <div className="flex items-center">
+              {/* <div className="flex items-center">
                 <input
                   id="blind"
                   name="gameMode"
@@ -60,7 +65,7 @@ const RoomCreation: React.FC<RoomCreationProps> = ({ onCreateRoom, onJoinRoom })
                 <label htmlFor="blind" className="ml-3 block text-sm font-medium text-gray-700">
                   Blind Race
                 </label>
-              </div>
+              </div> */}
               <div className="flex items-center">
                 <input
                   id="collaborative"
