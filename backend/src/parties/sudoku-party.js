@@ -114,9 +114,14 @@ class SudokuParty {
           // Broadcast player joined
           this.connections.forEach(conn => {
             console.log('Broadcasting player joined to:', conn.id);
+            // Convert Map to object for JSON serialization
+            const serializedState = {
+              ...this.gameState,
+              players: Object.fromEntries(this.gameState.players)
+            };
             conn.send(JSON.stringify({
               type: 'PLAYER_JOINED',
-              state: this.gameState
+              state: serializedState
             }));
           });
         } else {

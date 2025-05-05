@@ -1,26 +1,40 @@
 import React, { useState } from 'react';
 import SudokuGrid from './components/SudokuGrid';
 import RoomCreation from './components/RoomCreation';
-import { SudokuClient } from './utils/partykit';
-import { uniqueNamesGenerator, Config, adjectives, animals } from 'unique-names-generator';
+import { SudokuClient, GameState } from './utils/partykit';
+import { uniqueNamesGenerator, adjectives, animals } from 'unique-names-generator';
 import './App.css';
-
-interface GameState {
-  roomId: string | null;
-  gameMode: 'blind' | 'collaborative' | null;
-  difficulty: string | null;
-  puzzle: number[][] | null;
-  players: Map<string, any> | null;
-}
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>({
     roomId: null,
-    gameMode: null,
-    difficulty: null,
-    puzzle: null,
-    players: null
+    gameMode: 'collaborative',
+    difficulty: 'easy',
+    puzzle: [],
+    players: new Map(),
+    startTime: Date.now(),
+    isComplete: false
   });
+
+  const [client, setClient] = useState<SudokuClient | null>(null);
+
+  const handleCellUpdate = (row: number, col: number, value: number) => {
+    if (client) {
+      console.log('Making move:', { row, col, value, playerId: client.getPlayerId() });
+      // Update local state immediately
+      setGameState(prev => {
+        if (!prev.puzzle) return prev;
+        const newPuzzle = [...prev.puzzle];
+        newPuzzle[row][col] = value;
+        return {
+          ...prev,
+          puzzle: newPuzzle
+        };
+      });
+      // Send move to server
+      client.makeMove(row, col, value);
+    }
+  };
 
   const createRoom = (difficulty: string, gameMode: 'blind' | 'collaborative') => {
     console.log('Creating room with:', { difficulty, gameMode });
@@ -34,40 +48,53 @@ const App: React.FC = () => {
     });
     
     // Create a new client for the game
-    const client = new SudokuClient(
+    const newClient = new SudokuClient(
       roomId,
       (state) => {
         console.log('Game state received from server:', state);
         // Update the game state with the new state from the server
-        setGameState(prev => {
-          const newState = {
-            ...prev,
-            puzzle: state.puzzle,
-            players: state.players
-          };
-          console.log('Updated game state:', newState);
-          return newState;
-        });
+        setGameState(prev => ({
+          ...prev,
+          ...state,
+          players: state.players instanceof Map ? state.players : new Map(Object.entries(state.players))
+        }));
       },
       (move) => {
         console.log('Move made:', move);
+        // Update the game state with the move
+        setGameState(prev => {
+          if (!prev.puzzle) return prev;
+          const newPuzzle = [...prev.puzzle];
+          newPuzzle[move.row][move.col] = move.value;
+          return {
+            ...prev,
+            puzzle: newPuzzle
+          };
+        });
       },
       (winner) => {
         console.log('Game complete! Winner:', winner);
+        setGameState(prev => ({ ...prev, isComplete: true, winner }));
       }
     );
 
-    // Create the game with the selected difficulty
-    client.createGame(difficulty, gameMode);
+    setClient(newClient);
 
-    // Update the game state
+    // Update the game state immediately
     setGameState({
-      roomId: client.roomId,
+      roomId: newClient.roomId,
       gameMode,
       difficulty,
-      puzzle: null,
-      players: null
+      puzzle: [],
+      players: new Map(),
+      startTime: Date.now(),
+      isComplete: false
     });
+
+    // Create the game after a short delay to ensure connection is established
+    setTimeout(() => {
+      newClient.createGame(difficulty, gameMode);
+    }, 500);
   };
 
   // Join an existing room by roomId
@@ -75,42 +102,53 @@ const App: React.FC = () => {
     console.log('Joining room:', roomId);
     
     // Create a new client for the game
-    const client = new SudokuClient(
+    const newClient = new SudokuClient(
       roomId,
       (state) => {
         console.log('Game state received from server:', state);
         // Update the game state with the new state from the server
-        setGameState(prev => {
-          const newState = {
-            ...prev,
-            puzzle: state.puzzle,
-            players: state.players,
-            gameMode: state.gameMode || prev.gameMode,
-            difficulty: state.difficulty || prev.difficulty
-          };
-          console.log('Updated game state:', newState);
-          return newState;
-        });
+        setGameState(prev => ({
+          ...prev,
+          ...state,
+          players: state.players instanceof Map ? state.players : new Map(Object.entries(state.players))
+        }));
       },
       (move) => {
         console.log('Move made:', move);
+        // Update the game state with the move
+        setGameState(prev => {
+          if (!prev.puzzle) return prev;
+          const newPuzzle = [...prev.puzzle];
+          newPuzzle[move.row][move.col] = move.value;
+          return {
+            ...prev,
+            puzzle: newPuzzle
+          };
+        });
       },
       (winner) => {
         console.log('Game complete! Winner:', winner);
+        setGameState(prev => ({ ...prev, isComplete: true, winner }));
       }
     );
 
+    setClient(newClient);
+
     // Update the game state
     setGameState({
-      roomId: client.roomId,
-      gameMode: null,
-      difficulty: null,
-      puzzle: null,
-      players: null
+      roomId: newClient.roomId,
+      gameMode: 'collaborative',
+      difficulty: 'easy',
+      puzzle: [],
+      players: new Map(),
+      startTime: Date.now(),
+      isComplete: false
     });
 
-    // Join the game
-    client.joinGame();
+    // Join the game after a short delay to ensure connection is established
+    setTimeout(() => {
+      newClient.joinGame();
+    }, 500);
   };
 
   // Auto-join by URL
@@ -127,13 +165,45 @@ const App: React.FC = () => {
     console.log('Game state changed:', gameState);
   }, [gameState]);
 
+  // Add effect to handle client connection
+  React.useEffect(() => {
+    if (client && gameState.roomId) {
+      console.log('Client connected, joining game...');
+      // Join the game after a short delay to ensure connection is established
+      setTimeout(() => {
+        client.joinGame();
+      }, 500);
+    }
+  }, [client, gameState.roomId]);
+
+  // Add effect to clean up client on unmount
+  React.useEffect(() => {
+    return () => {
+      if (client) {
+        client.disconnect();
+      }
+    };
+  }, [client]);
+
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow">
+      <header className="bg-[#f5f2eb] shadow">
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Speed Sudoku
-          </h1>
+          <div className="flex items-center justify-center gap-4">
+            <img 
+              src="/sudoku-logo.png" 
+              alt="Speed Sudoku Logo" 
+              className="h-20 w-20 object-contain"
+            />
+            <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-2">
+              Speed Sudoku
+            </h1>
+            <img 
+              src="/sudoku-logo.png" 
+              alt="Speed Sudoku Logo" 
+              className="h-20 w-20 object-contain"
+            />
+          </div>
         </div>
       </header>
       <main>
@@ -141,9 +211,10 @@ const App: React.FC = () => {
           {!gameState.roomId ? (
             <RoomCreation onCreateRoom={createRoom} onJoinRoom={joinRoom} />
           ) : (
-            <SudokuGrid gameState={gameState} />
+            <SudokuGrid gameState={gameState} onCellUpdate={handleCellUpdate} client={client} />
           )}
         </div>
+      
       </main>
     </div>
   );
