@@ -147,35 +147,101 @@ export class SudokuService {
 
   // Check for hidden singles (cells that can only contain one number)
   private static hasHiddenSingles(puzzle: number[][]): boolean {
-    // Implementation of hidden singles detection
-    return false; // Placeholder
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        if (puzzle[row][col] === 0) {
+          const possibleNumbers = new Set<number>();
+          for (let num = 1; num <= 9; num++) {
+            if (this.isValidMove(puzzle, row, col, num)) {
+              possibleNumbers.add(num);
+            }
+          }
+          if (possibleNumbers.size === 1) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   // Check for naked pairs (two cells in a unit that can only contain the same two numbers)
   private static hasNakedPairs(puzzle: number[][]): boolean {
-    // Implementation of naked pairs detection
-    return false; // Placeholder
+    // Check rows
+    for (let row = 0; row < 9; row++) {
+      const emptyCells = [];
+      for (let col = 0; col < 9; col++) {
+        if (puzzle[row][col] === 0) {
+          const possibleNumbers = new Set<number>();
+          for (let num = 1; num <= 9; num++) {
+            if (this.isValidMove(puzzle, row, col, num)) {
+              possibleNumbers.add(num);
+            }
+          }
+          if (possibleNumbers.size === 2) {
+            emptyCells.push({ col, numbers: possibleNumbers });
+          }
+        }
+      }
+      
+      // Check for pairs with same numbers
+      for (let i = 0; i < emptyCells.length; i++) {
+        for (let j = i + 1; j < emptyCells.length; j++) {
+          if (this.areSetsEqual(emptyCells[i].numbers, emptyCells[j].numbers)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   // Check for X-Wing pattern
   private static hasXWing(puzzle: number[][]): boolean {
-    // Implementation of X-Wing pattern detection
-    return false; // Placeholder
+    for (let num = 1; num <= 9; num++) {
+      // Check rows
+      for (let row1 = 0; row1 < 9; row1++) {
+        for (let row2 = row1 + 1; row2 < 9; row2++) {
+          const cols1 = this.getPossibleColumns(puzzle, row1, num);
+          const cols2 = this.getPossibleColumns(puzzle, row2, num);
+          
+          if (cols1.length === 2 && cols2.length === 2 && 
+              this.areArraysEqual(cols1, cols2)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  // Helper method to check if two sets are equal
+  private static areSetsEqual(set1: Set<number>, set2: Set<number>): boolean {
+    if (set1.size !== set2.size) return false;
+    for (const item of set1) {
+      if (!set2.has(item)) return false;
+    }
+    return true;
+  }
+
+  // Helper method to check if two arrays are equal
+  private static areArraysEqual(arr1: number[], arr2: number[]): boolean {
+    if (arr1.length !== arr2.length) return false;
+    return arr1.every((val, index) => val === arr2[index]);
+  }
+
+  // Helper method to get possible columns for a number in a row
+  private static getPossibleColumns(puzzle: number[][], row: number, num: number): number[] {
+    const cols: number[] = [];
+    for (let col = 0; col < 9; col++) {
+      if (puzzle[row][col] === 0 && this.isValidMove(puzzle, row, col, num)) {
+        cols.push(col);
+      }
+    }
+    return cols;
   }
 }
 
 export function generateSudokuPuzzle(difficulty: string): number[][] {
-  // For now, return a simple puzzle for testing
-  // In a real implementation, this would generate puzzles based on difficulty
-  return [
-    [5, 3, 0, 0, 7, 0, 0, 0, 0],
-    [6, 0, 0, 1, 9, 5, 0, 0, 0],
-    [0, 9, 8, 0, 0, 0, 0, 6, 0],
-    [8, 0, 0, 0, 6, 0, 0, 0, 3],
-    [4, 0, 0, 8, 0, 3, 0, 0, 1],
-    [7, 0, 0, 0, 2, 0, 0, 0, 6],
-    [0, 6, 0, 0, 0, 0, 2, 8, 0],
-    [0, 0, 0, 4, 1, 9, 0, 0, 5],
-    [0, 0, 0, 0, 8, 0, 0, 7, 9]
-  ];
+  return SudokuService.generatePuzzle(difficulty as 'Easy' | 'Medium' | 'Hard' | 'Diabolical').puzzle;
 } 
